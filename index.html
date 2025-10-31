@@ -19,19 +19,17 @@ textarea{
     <button id="runBtn">求解</button>
     <pre id="output" style="white-space: pre-wrap; word-wrap: break-word;"></pre>
 
-    <script>
-        async function runPythonFile() {
-            const outputEl = document.getElementById("output");
-            outputEl.textContent = "计算中...\n";
+    <script type=module>
+        import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.mjs";
 
-            // 加载 Pyodide
-            const pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" });
-            await pyodide.loadPackage("scipy");  // 加载 SciPy
+        let pyodide = null;
 
-            const data = document.getElementById("inputFormula").value;
-
-            pyodide.globals.set("my_str", data);
-
+        async function initPyodide() {
+            if (!pyodide) {
+                pyodide = await loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/" })
+                await pyodide.loadPackage("scipy");
+                console.log("Pyodide 已加载");
+            }
             // 重定向 print 输出到网页
             pyodide.runPython(`
 import sys
@@ -48,6 +46,18 @@ class OutputCatcher:
 sys.stdout = OutputCatcher()
 sys.stderr = OutputCatcher()
 `);
+            return pyodide;
+        }
+
+        async function runPythonFile() {
+            const outputEl = document.getElementById("output");
+            outputEl.textContent = "计算中...\n";
+
+            const py = await initPyodide();
+
+            const data = document.getElementById("inputFormula").value;
+            py.globals.set("my_str", data);
+
 
             try {
                 // 加载 Python 文件
@@ -55,11 +65,16 @@ sys.stderr = OutputCatcher()
                 const code = await response.text();
 
                 // 执行 Python 代码
-                await pyodide.runPythonAsync(code);
+                await py.runPythonAsync(code);
 
             } catch (err) {
                 outputEl.textContent += "运行出错";
                 console.log(err)
+            } finally {
+                await py.runPythonAsync(`
+import gc
+gc.collect()
+`);
             }
         }
 
